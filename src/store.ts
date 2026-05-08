@@ -86,7 +86,7 @@ export const useAppStore = create<AppState>()(
       setPhase:       (phase) => set({ phase }),
       setKcalTarget:  (v) => set({ kcalTarget: v }),
       setTargetKg:    (v) => set({ targetKg: v }),
-      setChatHistory: (msgs) => set({ chatHistory: msgs, chatDate: new Date().toISOString().slice(0, 10) }),
+      setChatHistory: (msgs) => set({ chatHistory: msgs.slice(-80) }),
 
       resetData: () =>
         set((s) => ({

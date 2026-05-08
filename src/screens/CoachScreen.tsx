@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, useMemo } from 'react'
 import { Send } from 'lucide-react'
 import { T } from '../tokens'
-import { useAppStore, programWeek, todayLabel, isoToday, mealsForDate, type Phase, type MealEntry, type ChatMessage } from '../store'
+import { useAppStore, programWeek, todayLabel, isoToday, type Phase, type MealEntry, type SportSession, type ChatMessage } from '../store'
 import TabBar, { type TabKey } from '../components/TabBar'
 
 // ── System prompt ─────────────────────────────────────────────────────────
@@ -32,7 +32,8 @@ TON STYLE :
 - Si elle veut craquer : alternative concrète + levier psychologique adapté
 - Si elle a craqué : "c'est fait, repas suivant on repart" — jamais de culpabilisation
 - Toujours en français
-- Utilise l'historique des repas du jour pour personnaliser tes recommandations (bilan, ce qu'il reste, ajustements)
+- Tu as accès au journal des 7 derniers jours (repas + sport). Utilise-le activement : félicite les séances faites, note les patterns alimentaires, adapte tes conseils à ce qui s'est réellement passé
+- Quand c'est le début d'une nouvelle journée, ouvre la conversation en faisant un bilan rapide d'hier si les données le permettent
 
 EXTRACTION REPAS :
 Quand Aurélie décrit ce qu'elle a mangé ou va manger, décompose CHAQUE aliment / boisson séparément et ajoute un tag JSON par item à la fin du message :
@@ -57,32 +58,51 @@ Les phases possibles : déficit, maintenance, rééquilibrage`
 function buildSystemPrompt(
   phase: Phase,
   week: number,
+  kcalTarget: number,
   currentKg: number,
   lost: number,
-  history: { date: string; kg: number }[],
-  todayMeals: MealEntry[],
+  weightHistory: { date: string; kg: number }[],
+  allMeals: MealEntry[],
+  allSessions: SportSession[],
 ): string {
-  const recent = history.slice(-5).map(e => `  ${e.date} : ${e.kg.toFixed(2)} kg`).join('\n')
+  const recentWeight = weightHistory.slice(-5).map(e => `  ${e.date} : ${e.kg.toFixed(2)} kg`).join('\n')
+  const today = isoToday()
 
-  const mealLog = todayMeals.length === 0
-    ? '  (aucun repas enregistré pour l\'instant)'
-    : todayMeals.map(m =>
-        `  ${m.time} — ${m.name} : ${m.kcal} kcal (P${m.proteins}g G${m.carbs}g L${m.fats}g F${m.fiber}g)`
-      ).join('\n')
+  // Build 7-day journal
+  const journalLines: string[] = []
+  for (let i = 6; i >= 0; i--) {
+    const d = new Date()
+    d.setDate(d.getDate() - i)
+    const iso = d.toISOString().slice(0, 10)
+    const label = d.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'short' })
+    const dayMeals = allMeals.filter(m => m.date === iso)
+    const daySessions = allSessions.filter(s => s.date === iso)
+    if (dayMeals.length === 0 && daySessions.length === 0) continue
 
-  const totalKcal = todayMeals.reduce((s, m) => s + m.kcal, 0)
+    const totalKcal = dayMeals.reduce((s, m) => s + m.kcal, 0)
+    const marker = iso === today ? '→ ' : '  '
+    const dayLabel = `${marker}${label}${iso === today ? " (aujourd'hui)" : ''}`
+    const mealsLine = dayMeals.length > 0
+      ? `    Repas : ${totalKcal} kcal — ${dayMeals.map(m => `${m.name} (${m.kcal}kcal P${m.proteins}g)`).join(', ')}`
+      : `    Repas : non enregistrés`
+    const sportLines = daySessions.map(s =>
+      `    Sport : ${s.type} ${s.duration}min${s.done ? ' ✓ fait' : ' (planifié)'}  ~${s.kcal} kcal brûlés`
+    )
+    journalLines.push([dayLabel, mealsLine, ...sportLines].join('\n'))
+  }
+  const journal = journalLines.length > 0 ? journalLines.join('\n\n') : '  (aucune donnée enregistrée encore)'
 
   return `${BASE_PROMPT}
 
 DONNÉES ACTUELLES (${todayLabel()}) :
 - Semaine ${week} du programme
 - Poids actuel : ${currentKg.toFixed(2).replace('.', ',')} kg (−${lost.toFixed(2).replace('.', ',')} kg depuis le départ)
-- Phase : ${phase}
+- Phase : ${phase} | Cible : ${kcalTarget} kcal/jour
 - Historique poids récent :
-${recent}
+${recentWeight}
 
-REPAS D'AUJOURD'HUI (${totalKcal} kcal sur 1680 cible) :
-${mealLog}`
+JOURNAL 7 DERNIERS JOURS :
+${journal}`
 }
 
 // ── Phase detection ───────────────────────────────────────────────────────
@@ -345,23 +365,20 @@ function buildGreeting(week: number, lost: number): string {
 
 // ── Coach screen ──────────────────────────────────────────────────────────
 export default function CoachScreen({ onNavigate }: { onNavigate: (tab: TabKey) => void }) {
-  const { phase, programStart, weightHistory, meals, chatHistory, chatDate, setPhase, addMeal, setChatHistory } = useAppStore()
+  const { phase, programStart, weightHistory, meals, sessions, kcalTarget, chatHistory, setPhase, addMeal, setChatHistory } = useAppStore()
 
   const week = programWeek(programStart)
   const latest = weightHistory.at(-1)
   const start = weightHistory[0]
   const lost = start && latest ? start.kg - latest.kg : 0
-  const todayMeals = mealsForDate(meals, isoToday())
-  const today = isoToday()
 
-  const systemPrompt = buildSystemPrompt(phase, week, latest?.kg ?? 0, lost, weightHistory, todayMeals)
+  const systemPrompt = buildSystemPrompt(phase, week, kcalTarget, latest?.kg ?? 0, lost, weightHistory, meals, sessions)
 
-  // Display the store's history for today, or a local greeting — never write to store just to show greeting
+  // Always show full history — never reset, Léa remembers everything
   const messages = useMemo(() => {
-    if (chatDate === today && chatHistory.length > 0) return chatHistory
+    if (chatHistory.length > 0) return chatHistory
     return [{ id: '0', role: 'assistant' as const, content: buildGreeting(week, lost) }]
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [chatHistory, chatDate, today])
+  }, [chatHistory, week, lost])
 
   function setMessages(updater: ChatMessage[] | ((prev: ChatMessage[]) => ChatMessage[])) {
     const next = typeof updater === 'function' ? updater(messages) : updater
@@ -396,7 +413,7 @@ export default function CoachScreen({ onNavigate }: { onNavigate: (tab: TabKey) 
     setApiError(null)
     streamRef.current = ''
 
-    const apiMsgs = next.map(m => ({ role: m.role, content: m.content }))
+    const apiMsgs = next.slice(-30).map(m => ({ role: m.role, content: m.content }))
 
     try {
       await streamLea(systemPrompt, apiMsgs, (chunk) => {
