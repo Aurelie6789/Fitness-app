@@ -39,6 +39,8 @@ export const KCAL_PER_MIN: Record<SportType, number> = {
   Autre:  5,
 }
 
+export type ChatMessage = { id: string; role: 'user' | 'assistant'; content: string }
+
 interface AppState {
   phase: Phase
   programStart: string
@@ -48,17 +50,20 @@ interface AppState {
   weightHistory: WeightEntry[]
   sessions: SportSession[]
   meals: MealEntry[]
+  chatHistory: ChatMessage[]
+  chatDate: string   // ISO date of last chat — reset conversation if day changes
 
-  setPhase:      (phase: Phase) => void
-  setKcalTarget: (v: number) => void
-  setTargetKg:   (v: number) => void
-  addWeight:     (entry: WeightEntry) => void
-  addSession:    (session: SportSession) => void
-  toggleDone:    (id: string) => void
-  removeSession: (id: string) => void
-  addMeal:       (meal: MealEntry) => void
-  removeMeal:    (id: string) => void
-  resetData:     () => void
+  setPhase:        (phase: Phase) => void
+  setKcalTarget:   (v: number) => void
+  setTargetKg:     (v: number) => void
+  addWeight:       (entry: WeightEntry) => void
+  addSession:      (session: SportSession) => void
+  toggleDone:      (id: string) => void
+  removeSession:   (id: string) => void
+  addMeal:         (meal: MealEntry) => void
+  removeMeal:      (id: string) => void
+  setChatHistory:  (msgs: ChatMessage[]) => void
+  resetData:       () => void
 }
 
 export const useAppStore = create<AppState>()(
@@ -75,15 +80,20 @@ export const useAppStore = create<AppState>()(
       ],
       sessions: [],
       meals: [],
+      chatHistory: [],
+      chatDate: '',
 
-      setPhase:      (phase) => set({ phase }),
-      setKcalTarget: (v) => set({ kcalTarget: v }),
-      setTargetKg:   (v) => set({ targetKg: v }),
+      setPhase:       (phase) => set({ phase }),
+      setKcalTarget:  (v) => set({ kcalTarget: v }),
+      setTargetKg:    (v) => set({ targetKg: v }),
+      setChatHistory: (msgs) => set({ chatHistory: msgs, chatDate: new Date().toISOString().slice(0, 10) }),
 
       resetData: () =>
         set((s) => ({
           sessions: [],
           meals: [],
+          chatHistory: [],
+          chatDate: '',
           weightHistory: s.weightHistory.slice(0, 1),
           phase: 'déficit',
         })),

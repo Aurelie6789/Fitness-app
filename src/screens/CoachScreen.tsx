@@ -1,11 +1,8 @@
 import { useState, useRef, useEffect } from 'react'
 import { Send } from 'lucide-react'
 import { T } from '../tokens'
-import { useAppStore, programWeek, todayLabel, isoToday, mealsForDate, type Phase, type MealEntry } from '../store'
+import { useAppStore, programWeek, todayLabel, isoToday, mealsForDate, type Phase, type MealEntry, type ChatMessage } from '../store'
 import TabBar, { type TabKey } from '../components/TabBar'
-
-// ── Types ─────────────────────────────────────────────────────────────────
-type ChatMessage = { id: string; role: 'user' | 'assistant'; content: string }
 
 // ── System prompt ─────────────────────────────────────────────────────────
 const BASE_PROMPT = `Tu es Léa, coach personnelle d'Aurélie. Tu combines trois expertises :
@@ -336,23 +333,35 @@ function PhaseCard({ phase, onAccept, onDismiss }: {
   )
 }
 
+// ── Dynamic greeting ──────────────────────────────────────────────────────
+function buildGreeting(week: number, lost: number): string {
+  const hour = new Date().getHours()
+  const lostStr = lost.toFixed(2).replace('.', ',')
+  if (hour < 10) return `Bonjour Aurélie ! Semaine ${week}, −${lostStr} kg. Comment tu vas ce matin ?`
+  if (hour < 14) return `Coucou ! Semaine ${week}, −${lostStr} kg au compteur. Qu'est-ce qui se passe aujourd'hui ?`
+  if (hour < 18) return `Hello Aurélie. Semaine ${week}, −${lostStr} kg — bien joué. Comment s'est passée ta journée ?`
+  return `Bonsoir ! Semaine ${week}, −${lostStr} kg. C'était comment aujourd'hui ?`
+}
+
 // ── Coach screen ──────────────────────────────────────────────────────────
 export default function CoachScreen({ onNavigate }: { onNavigate: (tab: TabKey) => void }) {
-  const { phase, programStart, weightHistory, meals, setPhase, addMeal } = useAppStore()
+  const { phase, programStart, weightHistory, meals, chatHistory, chatDate, setPhase, addMeal, setChatHistory } = useAppStore()
 
   const week = programWeek(programStart)
   const latest = weightHistory.at(-1)
   const start = weightHistory[0]
   const lost = start && latest ? start.kg - latest.kg : 0
   const todayMeals = mealsForDate(meals, isoToday())
+  const today = isoToday()
 
   const systemPrompt = buildSystemPrompt(phase, week, latest?.kg ?? 0, lost, weightHistory, todayMeals)
 
-  const greeting = `Coucou Aurélie. Semaine ${week}, −${lost.toFixed(2).replace('.', ',')} kg — beau début. Qu'est-ce qui se passe aujourd'hui ?`
+  // Restore today's conversation or start fresh
+  const initialMessages: ChatMessage[] = chatDate === today && chatHistory.length > 0
+    ? chatHistory
+    : [{ id: '0', role: 'assistant', content: buildGreeting(week, lost) }]
 
-  const [messages, setMessages] = useState<ChatMessage[]>([
-    { id: '0', role: 'assistant', content: greeting },
-  ])
+  const [messages, setMessages] = useState<ChatMessage[]>(initialMessages)
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
   const [streamText, setStreamText] = useState('')
@@ -368,6 +377,11 @@ export default function CoachScreen({ onNavigate }: { onNavigate: (tab: TabKey) 
     const el = scrollRef.current
     if (el) el.scrollTop = el.scrollHeight
   }, [messages, streamText])
+
+  // Persist conversation to store
+  useEffect(() => {
+    if (messages.length > 1) setChatHistory(messages)
+  }, [messages])
 
   async function handleSend() {
     const text = input.trim()
@@ -496,13 +510,14 @@ export default function CoachScreen({ onNavigate }: { onNavigate: (tab: TabKey) 
             onChange={e => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
             placeholder="Message à Léa…"
-            className="flex-1 resize-none rounded-[16px] px-4 py-[10px] font-tight text-[14px] text-fg outline-none"
+            className="flex-1 resize-none rounded-[16px] px-4 py-[10px] font-tight text-fg outline-none"
             style={{
               background: T.elevated,
               border: `1px solid ${T.hairline2}`,
               color: T.fg,
               maxHeight: '120px',
               lineHeight: '1.4',
+              fontSize: '16px',
             }}
             onInput={e => {
               const t = e.currentTarget
