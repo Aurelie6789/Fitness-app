@@ -356,15 +356,15 @@ export default function CoachScreen({ onNavigate }: { onNavigate: (tab: TabKey) 
 
   const systemPrompt = buildSystemPrompt(phase, week, latest?.kg ?? 0, lost, weightHistory, todayMeals)
 
-  // Messages live directly in the store — no useState, guaranteed persistence
-  const messages: ChatMessage[] = chatDate === today && chatHistory.length > 0
-    ? chatHistory
-    : (() => {
-        const greeting = [{ id: '0', role: 'assistant' as const, content: buildGreeting(week, lost) }]
-        // Seed the store so next mount restores it
-        if (chatDate !== today) setChatHistory(greeting)
-        return greeting
-      })()
+  // Initialize greeting once on mount (or when day changes)
+  useEffect(() => {
+    if (chatDate !== today || chatHistory.length === 0) {
+      setChatHistory([{ id: '0', role: 'assistant' as const, content: buildGreeting(week, lost) }])
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  const messages = chatHistory
 
   function setMessages(updater: ChatMessage[] | ((prev: ChatMessage[]) => ChatMessage[])) {
     const next = typeof updater === 'function' ? updater(messages) : updater
