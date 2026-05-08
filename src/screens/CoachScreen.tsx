@@ -356,12 +356,21 @@ export default function CoachScreen({ onNavigate }: { onNavigate: (tab: TabKey) 
 
   const systemPrompt = buildSystemPrompt(phase, week, latest?.kg ?? 0, lost, weightHistory, todayMeals)
 
-  // Restore today's conversation or start fresh
-  const initialMessages: ChatMessage[] = chatDate === today && chatHistory.length > 0
+  // Messages live directly in the store — no useState, guaranteed persistence
+  const messages: ChatMessage[] = chatDate === today && chatHistory.length > 0
     ? chatHistory
-    : [{ id: '0', role: 'assistant', content: buildGreeting(week, lost) }]
+    : (() => {
+        const greeting = [{ id: '0', role: 'assistant' as const, content: buildGreeting(week, lost) }]
+        // Seed the store so next mount restores it
+        if (chatDate !== today) setChatHistory(greeting)
+        return greeting
+      })()
 
-  const [messages, setMessages] = useState<ChatMessage[]>(initialMessages)
+  function setMessages(updater: ChatMessage[] | ((prev: ChatMessage[]) => ChatMessage[])) {
+    const next = typeof updater === 'function' ? updater(messages) : updater
+    setChatHistory(next)
+  }
+
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
   const [streamText, setStreamText] = useState('')
@@ -378,18 +387,13 @@ export default function CoachScreen({ onNavigate }: { onNavigate: (tab: TabKey) 
     if (el) el.scrollTop = el.scrollHeight
   }, [messages, streamText])
 
-  // Persist conversation to store
-  useEffect(() => {
-    if (messages.length > 1) setChatHistory(messages)
-  }, [messages])
-
   async function handleSend() {
     const text = input.trim()
     if (!text || loading) return
 
     const userMsg: ChatMessage = { id: Date.now().toString(), role: 'user', content: text }
     const next = [...messages, userMsg]
-    setMessages(next)
+    setChatHistory(next)
     setInput('')
     setLoading(true)
     setApiError(null)
@@ -408,7 +412,7 @@ export default function CoachScreen({ onNavigate }: { onNavigate: (tab: TabKey) 
       const detectedMeals = extractMeals(full, isoToday())
       const clean = stripMealTags(stripPhaseTag(full))
 
-      setMessages(prev => [...prev, { id: Date.now().toString(), role: 'assistant', content: clean }])
+      setChatHistory([...next, { id: Date.now().toString(), role: 'assistant', content: clean }])
       if (detectedPhase && detectedPhase !== phase) setPendingPhase(detectedPhase)
       if (detectedMeals.length > 0) setPendingMeals(detectedMeals)
     } catch (err: unknown) {
