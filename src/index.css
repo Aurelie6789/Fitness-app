@@ -1,0 +1,74 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ── Design token CSS variables ─────────────────────────────────────────── */
+:root {
+  /* Foreground opacity variants */
+  --c-fg-mid:   rgba(245, 241, 232, 0.62);
+  --c-fg-dim:   rgba(245, 241, 232, 0.38);
+  --c-fg-faint: rgba(245, 241, 232, 0.18);
+
+  /* Hairlines */
+  --c-hairline:  rgba(255, 245, 225, 0.07);
+  --c-hairline2: rgba(255, 245, 225, 0.13);
+
+  /* Accent tints */
+  --c-accent-tint:  rgba(159, 230, 181, 0.08);
+  --c-accent-tint2: rgba(159, 230, 181, 0.14);
+}
+
+/* ── Base ────────────────────────────────────────────────────────────────── */
+@layer base {
+  *,
+  *::before,
+  *::after {
+    -webkit-tap-highlight-color: transparent;
+    box-sizing: border-box;
+  }
+
+  html {
+    /* prevent pull-to-refresh jank on iOS */
+    overscroll-behavior-y: none;
+  }
+
+  body {
+    background-color: #0E0D0B;
+    color: #F5F1E8;
+    font-family: 'Inter Tight', 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    /* hide scrollbar on all platforms */
+    scrollbar-width: none;
+  }
+
+  body::-webkit-scrollbar { display: none; }
+
+  /* Smooth momentum scroll on iOS */
+  .scroll-momentum {
+    -webkit-overflow-scrolling: touch;
+  }
+}
+
+/* ── Utilities ───────────────────────────────────────────────────────────── */
+@layer utilities {
+  /* Frosted glass — used for tab bar */
+  .glass {
+    background: rgba(20, 18, 15, 0.78);
+    backdrop-filter: blur(18px) saturate(160%);
+    -webkit-backdrop-filter: blur(18px) saturate(160%);
+  }
+
+  /* Anton display helpers */
+  .text-hero { font-size: 96px; line-height: 0.85; }
+  .text-big-stat { font-size: 52px; }
+  .text-screen-title { font-size: 38px; line-height: 0.95; }
+  .text-hero-quote { font-size: 46px; line-height: 0.92; }
+
+  /* Hairline borders via CSS vars */
+  .border-hl  { border: 1px solid var(--c-hairline); }
+  .border-hl2 { border: 1px solid var(--c-hairline2); }
+  .border-b-hl  { border-bottom: 1px solid var(--c-hairline); }
+  .border-t-hl  { border-top: 1px solid var(--c-hairline); }
+  .border-r-hl  { border-right: 1px solid var(--c-hairline); }
+}
