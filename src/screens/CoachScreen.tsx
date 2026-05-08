@@ -137,7 +137,7 @@ async function streamLea(
   const apiKey = import.meta.env.VITE_ANTHROPIC_API_KEY
   if (!apiKey || apiKey === 'sk-ant-REMPLACE_MOI') throw new Error('CLE_MANQUANTE')
 
-  const res = await fetch('/anthropic/v1/messages', {
+  const res = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: {
       'x-api-key': apiKey,
