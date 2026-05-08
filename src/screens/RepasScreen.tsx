@@ -3,6 +3,7 @@ import { MessageCircle, Trash2, Plus, Flame } from 'lucide-react'
 import { T } from '../tokens'
 import { useAppStore, isoToday, mealsForDate } from '../store'
 import TabBar, { type TabKey } from '../components/TabBar'
+import DateNav from '../components/DateNav'
 
 const MEAL_SLOTS = [
   { label: 'Petit-déjeuner', time: '08:00' },
@@ -22,14 +23,15 @@ function MacroBar({ value, max, color }: { value: number; max: number; color: st
 
 export default function RepasScreen({ onNavigate }: { onNavigate: (tab: TabKey) => void }) {
   const { meals, kcalTarget, addMeal, removeMeal } = useAppStore()
-  const todayIso = isoToday()
-  const todayMeals = mealsForDate(meals, todayIso)
+  const [selectedDate, setSelectedDate] = useState(isoToday)
+  const isToday = selectedDate === isoToday()
+  const dayMeals = mealsForDate(meals, selectedDate)
 
-  const totalKcal     = todayMeals.reduce((s, m) => s + m.kcal, 0)
-  const totalProteins = todayMeals.reduce((s, m) => s + m.proteins, 0)
-  const totalCarbs    = todayMeals.reduce((s, m) => s + m.carbs, 0)
-  const totalFats     = todayMeals.reduce((s, m) => s + m.fats, 0)
-  const totalFiber    = todayMeals.reduce((s, m) => s + (m.fiber ?? 0), 0)
+  const totalKcal     = dayMeals.reduce((s, m) => s + m.kcal, 0)
+  const totalProteins = dayMeals.reduce((s, m) => s + m.proteins, 0)
+  const totalCarbs    = dayMeals.reduce((s, m) => s + m.carbs, 0)
+  const totalFats     = dayMeals.reduce((s, m) => s + m.fats, 0)
+  const totalFiber    = dayMeals.reduce((s, m) => s + (m.fiber ?? 0), 0)
 
   const kcalPct = Math.min(100, kcalTarget > 0 ? (totalKcal / kcalTarget) * 100 : 0)
 
@@ -47,7 +49,7 @@ export default function RepasScreen({ onNavigate }: { onNavigate: (tab: TabKey) 
     if (!formName.trim() || !formKcal) return
     addMeal({
       id: Date.now().toString(),
-      date: todayIso,
+      date: selectedDate,
       time: formTime,
       name: formName.trim(),
       kcal: Number(formKcal) || 0,
@@ -73,12 +75,14 @@ export default function RepasScreen({ onNavigate }: { onNavigate: (tab: TabKey) 
         style={{ paddingBottom: 'calc(90px + env(safe-area-inset-bottom))' }}>
 
         {/* ── Header ────────────────────────────────────────────────── */}
-        <header className="px-[22px] pt-4 pb-[14px]">
+        <header className="px-[22px] pt-4 pb-[10px]">
           <p className="font-mono text-[10px] uppercase" style={{ color: T.fgDim, letterSpacing: '1.6px' }}>
             Alimentation
           </p>
           <h1 className="font-display text-[32px] leading-none text-fg mt-1 uppercase">Repas</h1>
         </header>
+
+        <DateNav date={selectedDate} onChange={setSelectedDate} />
 
         {/* ── Daily summary ──────────────────────────────────────────── */}
         <section className="px-[18px]">
@@ -147,7 +151,7 @@ export default function RepasScreen({ onNavigate }: { onNavigate: (tab: TabKey) 
         <section className="px-[18px] pt-4">
           <div className="flex justify-between items-center px-1 mb-3">
             <span className="font-mono text-[10px] uppercase" style={{ color: T.fgDim, letterSpacing: '1.4px' }}>
-              Aujourd'hui
+              {isToday ? "Aujourd'hui" : new Date(selectedDate + 'T12:00:00').toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'short' })}
             </span>
             <button
               onClick={() => setShowForm(v => !v)}
@@ -264,20 +268,20 @@ export default function RepasScreen({ onNavigate }: { onNavigate: (tab: TabKey) 
           )}
 
           {/* Meals list */}
-          {todayMeals.length === 0 ? (
+          {dayMeals.length === 0 ? (
             <div
               className="rounded-card px-4 py-6 text-center"
               style={{ background: T.surface, border: `1px solid ${T.hairline}` }}
             >
               <Flame size={22} color={T.fgFaint} strokeWidth={1.5} className="mx-auto mb-2" />
               <p className="font-tight text-[13px]" style={{ color: T.fgDim }}>
-                Aucun repas enregistré aujourd'hui
+                {isToday ? "Aucun repas enregistré aujourd'hui" : 'Aucun repas enregistré ce jour-là'}
               </p>
             </div>
           ) : (
             <div className="rounded-card overflow-hidden" style={{ background: T.surface, border: `1px solid ${T.hairline}` }}>
-              {todayMeals.map((m, i) => {
-                const isLast = i === todayMeals.length - 1
+              {dayMeals.map((m, i) => {
+                const isLast = i === dayMeals.length - 1
                 return (
                   <div
                     key={m.id}

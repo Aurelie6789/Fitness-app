@@ -1,8 +1,9 @@
 import { useState } from 'react'
 import { Check, Trash2, Dumbbell, Flame } from 'lucide-react'
 import { T } from '../tokens'
-import { useAppStore, thisWeekSessions, isoToday, KCAL_PER_MIN, type SportType, type SportSession } from '../store'
+import { useAppStore, thisWeekSessions, sessionsForDate, isoToday, KCAL_PER_MIN, type SportType, type SportSession } from '../store'
 import TabBar, { type TabKey } from '../components/TabBar'
+import DateNav from '../components/DateNav'
 
 const TYPES: SportType[] = ['Dynamo', 'Pilate', 'Boxe', 'Course', 'Marche', 'Yoga', 'Autre']
 
@@ -96,10 +97,9 @@ export default function SportScreen({ onNavigate }: { onNavigate: (tab: TabKey) 
     setType(null)
   }
 
-  // All sessions sorted newest first
-  const allSorted = [...sessions].sort((a, b) =>
-    `${b.date}${b.time}`.localeCompare(`${a.date}${a.time}`)
-  )
+  const [selectedDate, setSelectedDate] = useState(isoToday)
+  const isToday = selectedDate === isoToday()
+  const daySessions = sessionsForDate(sessions, selectedDate)
 
   return (
     <div className="min-h-dvh bg-bg text-fg font-tight relative"
@@ -108,12 +108,14 @@ export default function SportScreen({ onNavigate }: { onNavigate: (tab: TabKey) 
         style={{ paddingBottom: 'calc(90px + env(safe-area-inset-bottom))' }}>
 
         {/* ── Header ────────────────────────────────────────────────── */}
-        <header className="px-[22px] pt-4 pb-[14px]">
+        <header className="px-[22px] pt-4 pb-[10px]">
           <p className="font-mono text-[10px] uppercase" style={{ color: T.fgDim, letterSpacing: '1.6px' }}>
             Activité physique
           </p>
           <h1 className="font-display text-[32px] leading-none text-fg mt-1 uppercase">Sport</h1>
         </header>
+
+        <DateNav date={selectedDate} onChange={setSelectedDate} />
 
         {/* ── Week summary ──────────────────────────────────────────── */}
         <section className="px-[18px]">
@@ -251,16 +253,22 @@ export default function SportScreen({ onNavigate }: { onNavigate: (tab: TabKey) 
           </div>
         </section>
 
-        {/* ── Sessions list ──────────────────────────────────────────── */}
-        {allSorted.length > 0 && (
-          <section className="px-[18px] pt-4">
-            <p className="font-mono text-[10px] uppercase px-1 mb-3" style={{ color: T.fgDim, letterSpacing: '1.4px' }}>
-              Historique
-            </p>
+        {/* ── Sessions for selected day ──────────────────────────────── */}
+        <section className="px-[18px] pt-2 pb-2">
+          <p className="font-mono text-[10px] uppercase px-1 mb-3" style={{ color: T.fgDim, letterSpacing: '1.4px' }}>
+            {isToday ? "Aujourd'hui" : new Date(selectedDate + 'T12:00:00').toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'short' })}
+          </p>
+          {daySessions.length === 0 ? (
+            <div className="rounded-card px-4 py-5 flex items-center gap-3" style={{ background: T.surface, border: `1px solid ${T.hairline}` }}>
+              <Flame size={18} color={T.fgFaint} strokeWidth={1.5} />
+              <p className="font-tight text-[13px]" style={{ color: T.fgDim }}>
+                {isToday ? 'Aucune séance aujourd\'hui' : 'Aucune séance ce jour-là'}
+              </p>
+            </div>
+          ) : (
             <div className="rounded-card overflow-hidden" style={{ background: T.surface, border: `1px solid ${T.hairline}` }}>
-              {allSorted.map((s, i) => {
-                const isLast = i === allSorted.length - 1
-                const dateLabel = new Date(s.date).toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' })
+              {daySessions.map((s, i) => {
+                const isLast = i === daySessions.length - 1
                 return (
                   <div
                     key={s.id}
@@ -274,18 +282,20 @@ export default function SportScreen({ onNavigate }: { onNavigate: (tab: TabKey) 
                       {TYPE_EMOJI[s.type]}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="font-tight text-[13px] font-semibold text-fg"
-                        style={{ opacity: s.done ? 1 : 0.65 }}>
+                      <p className="font-tight text-[13px] font-semibold text-fg" style={{ opacity: s.done ? 1 : 0.65 }}>
                         {s.type}
-                        {!s.done && <span className="ml-2 font-mono text-[9px] font-normal px-1.5 py-0.5 rounded-full"
-                          style={{ background: T.elevated, color: T.amber, border: `1px solid rgba(255,178,58,0.3)` }}>planifié</span>}
+                        {!s.done && (
+                          <span className="ml-2 font-mono text-[9px] font-normal px-1.5 py-0.5 rounded-full"
+                            style={{ background: T.elevated, color: T.amber, border: `1px solid rgba(255,178,58,0.3)` }}>
+                            planifié
+                          </span>
+                        )}
                       </p>
                       <p className="font-mono text-[10px] mt-0.5" style={{ color: T.fgDim }}>
-                        {dateLabel} · {s.time} · {formatDuration(s.duration)}
+                        {s.time} · {formatDuration(s.duration)} · −{s.kcal} kcal
                       </p>
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
-                      <span className="font-mono text-[10px]" style={{ color: T.accent }}>−{s.kcal}</span>
                       <button
                         onClick={() => toggleDone(s.id)}
                         className="w-7 h-7 rounded-full flex items-center justify-center"
@@ -305,8 +315,8 @@ export default function SportScreen({ onNavigate }: { onNavigate: (tab: TabKey) 
                 )
               })}
             </div>
-          </section>
-        )}
+          )}
+        </section>
 
       </div>
 
