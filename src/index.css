@@ -44,6 +44,11 @@
 
   body::-webkit-scrollbar { display: none; }
 
+  /* Prevent iOS Safari auto-zoom on input focus (requires >= 16px) */
+  input, textarea, select {
+    font-size: 16px;
+  }
+
   /* Smooth momentum scroll on iOS */
   .scroll-momentum {
     -webkit-overflow-scrolling: touch;

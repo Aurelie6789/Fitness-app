@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useMemo } from 'react'
 import { Send } from 'lucide-react'
 import { T } from '../tokens'
 import { useAppStore, programWeek, todayLabel, isoToday, mealsForDate, type Phase, type MealEntry, type ChatMessage } from '../store'
@@ -356,15 +356,12 @@ export default function CoachScreen({ onNavigate }: { onNavigate: (tab: TabKey) 
 
   const systemPrompt = buildSystemPrompt(phase, week, latest?.kg ?? 0, lost, weightHistory, todayMeals)
 
-  // Initialize greeting once on mount (or when day changes)
-  useEffect(() => {
-    if (chatDate !== today || chatHistory.length === 0) {
-      setChatHistory([{ id: '0', role: 'assistant' as const, content: buildGreeting(week, lost) }])
-    }
+  // Display the store's history for today, or a local greeting — never write to store just to show greeting
+  const messages = useMemo(() => {
+    if (chatDate === today && chatHistory.length > 0) return chatHistory
+    return [{ id: '0', role: 'assistant' as const, content: buildGreeting(week, lost) }]
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
-
-  const messages = chatHistory
+  }, [chatHistory, chatDate, today])
 
   function setMessages(updater: ChatMessage[] | ((prev: ChatMessage[]) => ChatMessage[])) {
     const next = typeof updater === 'function' ? updater(messages) : updater
