@@ -134,15 +134,22 @@ async function streamLea(
   messages: { role: string; content: string }[],
   onChunk: (t: string) => void,
 ) {
-  const apiKey = import.meta.env.VITE_ANTHROPIC_API_KEY
-  if (!apiKey || apiKey === 'sk-ant-REMPLACE_MOI') throw new Error('CLE_MANQUANTE')
+  const isDev = import.meta.env.DEV
+  const url = isDev ? '/anthropic/v1/messages' : '/api/chat'
 
-  const res = await fetch('https://api.anthropic.com/v1/messages', {
+  if (isDev) {
+    const apiKey = import.meta.env.VITE_ANTHROPIC_API_KEY
+    if (!apiKey || apiKey === 'sk-ant-REMPLACE_MOI') throw new Error('CLE_MANQUANTE')
+  }
+
+  const res = await fetch(url, {
     method: 'POST',
-    headers: {
-      'x-api-key': apiKey,
+    headers: isDev ? {
+      'x-api-key': import.meta.env.VITE_ANTHROPIC_API_KEY,
       'anthropic-version': '2023-06-01',
       'anthropic-dangerous-direct-browser-access': 'true',
+      'content-type': 'application/json',
+    } : {
       'content-type': 'application/json',
     },
     body: JSON.stringify({
