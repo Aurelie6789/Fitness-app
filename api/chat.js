@@ -1,26 +1,22 @@
-export const config = { runtime: 'edge' }
+export default async function handler(req, res) {
+  res.setHeader('access-control-allow-origin', '*')
+  res.setHeader('access-control-allow-methods', 'POST, OPTIONS')
+  res.setHeader('access-control-allow-headers', 'content-type')
 
-export default async function handler(req) {
-  if (req.method === 'OPTIONS') {
-    return new Response(null, {
-      headers: {
-        'access-control-allow-origin': '*',
-        'access-control-allow-methods': 'POST',
-        'access-control-allow-headers': 'content-type',
-      },
-    })
-  }
-
-  if (req.method !== 'POST') {
-    return new Response('Method not allowed', { status: 405 })
-  }
+  if (req.method === 'OPTIONS') return res.status(200).end()
+  if (req.method !== 'POST') return res.status(405).send('Method not allowed')
 
   const apiKey = process.env.ANTHROPIC_API_KEY
-  if (!apiKey) return new Response('Missing API key', { status: 500 })
+  if (!apiKey) return res.status(500).send('Missing API key')
 
-  const body = await req.text()
+  // Collect request body
+  const body = await new Promise((resolve) => {
+    let data = ''
+    req.on('data', chunk => { data += chunk })
+    req.on('end', () => resolve(data))
+  })
 
-  const response = await fetch('https://api.anthropic.com/v1/messages', {
+  const upstream = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: {
       'x-api-key': apiKey,
@@ -30,11 +26,13 @@ export default async function handler(req) {
     body,
   })
 
-  return new Response(response.body, {
-    status: response.status,
-    headers: {
-      'content-type': response.headers.get('content-type') ?? 'text/event-stream',
-      'access-control-allow-origin': '*',
-    },
-  })
+  res.status(upstream.status)
+  res.setHeader('content-type', upstream.headers.get('content-type') ?? 'text/event-stream')
+
+  const reader = upstream.body.getReader()
+  while (true) {
+    const { done, value } = await reader.read()
+    if (done) { res.end(); break }
+    res.write(value)
+  }
 }
