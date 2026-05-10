@@ -340,6 +340,9 @@ export default function HomeScreen({ onNavigate }: { onNavigate: (tab: TabKey) =
 
   const doneCount = programmeRows.filter(r => r.done).length
 
+  // Days with at least one meal or sport session recorded
+  const activeDays = new Set([...meals.map(m => m.date), ...sessions.map(s => s.date)]).size
+
   return (
     <div className="min-h-dvh bg-bg text-fg font-tight relative"
       style={{ paddingTop: 'env(safe-area-inset-top)' }}>
@@ -357,7 +360,7 @@ export default function HomeScreen({ onNavigate }: { onNavigate: (tab: TabKey) =
             <div className="flex items-center gap-[6px] px-3 py-2 rounded-pill bg-surface"
               style={{ border: `1px solid ${T.hairline2}` }}>
               <Flame size={15} color={T.coral} strokeWidth={1.75} />
-              <span className="font-display text-[16px] text-fg leading-none">10</span>
+              <span className="font-display text-[16px] text-fg leading-none">{activeDays}</span>
               <span className="text-[10px] uppercase tracking-[1px]" style={{ color: T.fgDim }}>jours</span>
             </div>
             <button
