@@ -128,14 +128,7 @@ export default function SportScreen({ onNavigate }: { onNavigate: (tab: TabKey) 
                 <p className="font-display text-[28px] leading-none text-fg mt-1">{weekSessions.length}</p>
                 <p className="font-mono text-[9px] mt-1" style={{ color: T.fgDim }}>cette semaine</p>
               </div>
-              <div className="flex-1">
-                <p className="font-mono text-[9px] uppercase" style={{ color: T.fgFaint, letterSpacing: '1px' }}>Dynamo</p>
-                <p className="font-display text-[28px] leading-none mt-1" style={{ color: dynamo >= 2 ? T.accent : T.fg }}>
-                  {dynamo}<span className="text-[14px]">/2</span>
-                </p>
-                <p className="font-mono text-[9px] mt-1" style={{ color: T.fgDim }}>objectif sem.</p>
-              </div>
-              <div className="flex-1">
+<div className="flex-1">
                 <p className="font-mono text-[9px] uppercase" style={{ color: T.fgFaint, letterSpacing: '1px' }}>Kcal</p>
                 <p className="font-display text-[28px] leading-none text-fg mt-1">{weekKcal}</p>
                 <p className="font-mono text-[9px] mt-1" style={{ color: T.fgDim }}>brûlées</p>
