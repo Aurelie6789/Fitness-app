@@ -392,6 +392,12 @@ function buildGreeting(week: number, lost: number): string {
 export default function CoachScreen({ onNavigate }: { onNavigate: (tab: TabKey) => void }) {
   const { phase, programStart, weightHistory, meals, sessions, kcalTarget, chatHistory, setPhase, addMeal, setChatHistory } = useAppStore()
 
+  // Wait for Zustand to finish rehydrating from localStorage before deciding to show greeting
+  const [hydrated, setHydrated] = useState(() => useAppStore.persist.hasHydrated())
+  useEffect(() => {
+    if (!hydrated) return useAppStore.persist.onFinishHydration(() => setHydrated(true))
+  }, [hydrated])
+
   const week = programWeek(programStart)
   const latest = weightHistory.at(-1)
   const start = weightHistory[0]
@@ -399,11 +405,12 @@ export default function CoachScreen({ onNavigate }: { onNavigate: (tab: TabKey) 
 
   const systemPrompt = buildSystemPrompt(phase, week, kcalTarget, latest?.kg ?? 0, lost, weightHistory, meals, sessions)
 
-  // Always show full history — never reset, Léa remembers everything
+  // Show history once hydrated — never reset, Léa remembers everything
   const messages = useMemo(() => {
-    if (chatHistory.length > 0) return chatHistory
-    return [{ id: '0', role: 'assistant' as const, content: buildGreeting(week, lost) }]
-  }, [chatHistory, week, lost])
+    if (hydrated && chatHistory.length > 0) return chatHistory
+    if (hydrated) return [{ id: '0', role: 'assistant' as const, content: buildGreeting(week, lost) }]
+    return [] // still loading from localStorage
+  }, [hydrated, chatHistory, week, lost])
 
   function setMessages(updater: ChatMessage[] | ((prev: ChatMessage[]) => ChatMessage[])) {
     const next = typeof updater === 'function' ? updater(messages) : updater
