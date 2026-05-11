@@ -207,6 +207,31 @@ async function streamLea(
   }
 }
 
+// ── Simple markdown renderer (bold, italic, bullets) ─────────────────────
+function renderMd(text: string) {
+  return text.split('\n').map((line, li) => {
+    // Bullet lines
+    const isBullet = /^[-•*]\s/.test(line)
+    const content = isBullet ? line.replace(/^[-•*]\s/, '') : line
+
+    // Inline bold/italic
+    const parts: React.ReactNode[] = []
+    const re = /\*\*(.+?)\*\*|\*(.+?)\*/g
+    let last = 0; let m: RegExpExecArray | null
+    while ((m = re.exec(content)) !== null) {
+      if (m.index > last) parts.push(content.slice(last, m.index))
+      if (m[1] !== undefined) parts.push(<strong key={m.index}>{m[1]}</strong>)
+      else if (m[2] !== undefined) parts.push(<em key={m.index}>{m[2]}</em>)
+      last = m.index + m[0].length
+    }
+    if (last < content.length) parts.push(content.slice(last))
+
+    return isBullet
+      ? <div key={li} className="flex gap-[6px] items-start"><span style={{ color: T.accent }} className="mt-[2px] shrink-0">·</span><span>{parts}</span></div>
+      : <p key={li} className={li > 0 ? 'mt-[4px]' : ''}>{parts}</p>
+  })
+}
+
 // ── Bubble components ─────────────────────────────────────────────────────
 function LeaBubble({ text, streaming }: { text: string; streaming?: boolean }) {
   return (
@@ -235,7 +260,7 @@ function LeaBubble({ text, streaming }: { text: string; streaming?: boolean }) {
             ))}
           </div>
         ) : (
-          <p className="font-tight text-[14px] leading-[1.5] text-fg whitespace-pre-wrap">{text}</p>
+          <div className="font-tight text-[14px] leading-[1.5] text-fg">{renderMd(text)}</div>
         )}
       </div>
     </div>
