@@ -35,12 +35,19 @@ TON STYLE :
 - Tu as accès au journal des 7 derniers jours (repas + sport). Utilise-le activement : félicite les séances faites, note les patterns alimentaires, adapte tes conseils à ce qui s'est réellement passé
 - Quand c'est le début d'une nouvelle journée, ouvre la conversation en faisant un bilan rapide d'hier si les données le permettent
 
+CONSEILS PROACTIFS (important) :
+- Si Aurélie décrit un repas calorique ou déséquilibré, signale-le gentiment et propose une alternative concrète AVANT qu'elle mange ("avocat + saumon c'est déjà riche en bonnes graisses — la mangue ajoute du sucre, tu pourrais la remplacer par du concombre ou juste en mettre moins")
+- Repère les combinaisons problématiques : graisses + sucres rapides, féculents le soir, portions restaurant systématiquement grandes
+- Ne laisse pas passer un repas clairement hors-cible sans le noter — mais en une phrase, sans drama
+
 EXTRACTION REPAS :
 Quand Aurélie décrit ce qu'elle a mangé ou va manger, décompose CHAQUE aliment / boisson séparément et ajoute un tag JSON par item à la fin du message :
-[REPAS: {"time":"HH:MM","name":"nom précis de l'aliment","kcal":X,"proteins":X,"carbs":X,"fats":X,"fiber":X}]
+[REPAS: {"date":"YYYY-MM-DD","time":"HH:MM","name":"nom précis de l'aliment","kcal":X,"proteins":X,"carbs":X,"fats":X,"fiber":X}]
 
 Règles d'extraction :
+- CRUCIAL : ne tague QUE les aliments mentionnés dans le DERNIER message d'Aurélie. Ne re-tague JAMAIS des aliments déjà mentionnés dans des messages précédents de la conversation
 - Un tag par aliment/boisson (ex: "pain au chocolat" → 1 tag, "café au lait" → 1 tag avec le lait inclus)
+- date : aujourd'hui par défaut (format YYYY-MM-DD). Si elle dit "hier soir" ou "hier" → utilise la date d'hier. Si elle précise une date, utilise-la
 - time : heure logique selon le contexte ("08:00" petit-dej, "12:30" déjeuner, "19:30" dîner) ou heure actuelle si "je viens de manger"
 - Estime les quantités standards si non précisées (1 pain au chocolat boulangerie = 70g, 1 café au lait = 200ml avec 150ml lait demi-écrémé)
 - Macros en grammes, arrondis à l'entier (inclure les fibres dans le champ "fiber")
@@ -51,6 +58,10 @@ Règles d'extraction :
   • Exemple : tartare de saumon resto → vise 380–420 kcal, pas 280
   • En cas de doute sur la taille d'une portion, prends la grande
 - N'ajoute ces tags QUE si elle décrit clairement des aliments consommés ou à consommer
+
+SUPPRESSION REPAS :
+Si Aurélie demande de supprimer ou corriger un repas enregistré à tort, ajoute à la fin :
+[SUPPRIMER_REPAS: {"name":"nom exact tel qu'enregistré"}]
 
 Si tu recommandes un changement de phase programme, ajoute en fin de message : [PHASE: nom_phase]
 Les phases possibles : déficit, maintenance, rééquilibrage`
@@ -117,6 +128,16 @@ function stripPhaseTag(text: string): string {
 }
 
 // ── Meal detection (multiple items) ──────────────────────────────────────
+function resolveDate(raw: string | undefined, todayIso: string): string {
+  if (!raw) return todayIso
+  if (raw === 'hier') {
+    const d = new Date(todayIso + 'T12:00:00'); d.setDate(d.getDate() - 1)
+    return d.toISOString().slice(0, 10)
+  }
+  if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return raw
+  return todayIso
+}
+
 function extractMeals(text: string, dateIso: string): MealEntry[] {
   const results: MealEntry[] = []
   const re = /\[REPAS:\s*(\{[^}]+\})\]/g
@@ -127,7 +148,7 @@ function extractMeals(text: string, dateIso: string): MealEntry[] {
       const data = JSON.parse(m[1])
       results.push({
         id: `${Date.now()}-${i++}`,
-        date: dateIso,
+        date: resolveDate(data.date, dateIso),
         time: data.time ?? '12:00',
         name: data.name ?? 'Aliment',
         kcal: Number(data.kcal) || 0,
@@ -140,6 +161,16 @@ function extractMeals(text: string, dateIso: string): MealEntry[] {
     } catch { /* skip malformed */ }
   }
   return results
+}
+
+// ── Meal deletion detection ───────────────────────────────────────────────
+function extractDeletion(text: string): string | null {
+  const m = text.match(/\[SUPPRIMER_REPAS:\s*(\{[^}]+\})\]/)
+  if (!m) return null
+  try { return JSON.parse(m[1]).name ?? null } catch { return null }
+}
+function stripDeletionTag(text: string): string {
+  return text.replace(/\[SUPPRIMER_REPAS:\s*\{[^}]+\}\]/g, '').trim()
 }
 function stripMealTags(text: string): string {
   return text.replace(/\[REPAS:\s*\{[^}]+\}\]/g, '').trim()
@@ -390,7 +421,7 @@ function buildGreeting(week: number, lost: number): string {
 
 // ── Coach screen ──────────────────────────────────────────────────────────
 export default function CoachScreen({ onNavigate }: { onNavigate: (tab: TabKey) => void }) {
-  const { phase, programStart, weightHistory, meals, sessions, kcalTarget, chatHistory, setPhase, addMeal, setChatHistory } = useAppStore()
+  const { phase, programStart, weightHistory, meals, sessions, kcalTarget, chatHistory, setPhase, addMeal, removeMeal, setChatHistory } = useAppStore()
 
   // Wait for Zustand to finish rehydrating from localStorage before deciding to show greeting
   const [hydrated, setHydrated] = useState(() => useAppStore.persist.hasHydrated())
@@ -422,6 +453,7 @@ export default function CoachScreen({ onNavigate }: { onNavigate: (tab: TabKey) 
   const [streamText, setStreamText] = useState('')
   const [pendingPhase, setPendingPhase] = useState<Phase | null>(null)
   const [pendingMeals, setPendingMeals] = useState<MealEntry[]>([])
+  const [pendingDeletion, setPendingDeletion] = useState<string | null>(null)
   const [apiError, setApiError] = useState<string | null>(null)
 
   const streamRef = useRef('')
@@ -456,11 +488,13 @@ export default function CoachScreen({ onNavigate }: { onNavigate: (tab: TabKey) 
       const full = streamRef.current
       const detectedPhase = extractPhase(full)
       const detectedMeals = extractMeals(full, isoToday())
-      const clean = stripMealTags(stripPhaseTag(full))
+      const deletionName = extractDeletion(full)
+      const clean = stripDeletionTag(stripMealTags(stripPhaseTag(full)))
 
       setChatHistory([...next, { id: Date.now().toString(), role: 'assistant', content: clean }])
       if (detectedPhase && detectedPhase !== phase) setPendingPhase(detectedPhase)
       if (detectedMeals.length > 0) setPendingMeals(detectedMeals)
+      if (deletionName) setPendingDeletion(deletionName)
     } catch (err: unknown) {
       const raw = err instanceof Error ? err.message : String(err)
       const msg = raw === 'CLE_MANQUANTE'
@@ -525,6 +559,31 @@ export default function CoachScreen({ onNavigate }: { onNavigate: (tab: TabKey) 
             onAccept={() => { pendingMeals.forEach(m => addMeal(m)); setPendingMeals([]) }}
             onDismiss={() => setPendingMeals([])}
           />
+        )}
+
+        {/* Deletion confirmation card */}
+        {pendingDeletion && (
+          <div className="mx-1 mb-4 rounded-card p-4" style={{ background: T.elevated, border: `1px solid ${T.hairline2}` }}>
+            <p className="font-mono text-[10px] uppercase mb-2" style={{ color: T.fgDim, letterSpacing: '1.2px' }}>Supprimer ce repas ?</p>
+            <p className="font-tight text-[14px] text-fg mb-3">{pendingDeletion}</p>
+            <div className="flex gap-2">
+              <button
+                onClick={() => {
+                  const match = [...useAppStore.getState().meals]
+                    .filter(m => m.name.toLowerCase() === pendingDeletion.toLowerCase())
+                    .sort((a, b) => b.id.localeCompare(a.id))[0]
+                  if (match) removeMeal(match.id)
+                  setPendingDeletion(null)
+                }}
+                className="flex-1 py-[10px] rounded-pill font-tight font-semibold text-[13px]"
+                style={{ background: T.coral, color: '#fff' }}
+              >Supprimer</button>
+              <button onClick={() => setPendingDeletion(null)}
+                className="flex-1 py-[10px] rounded-pill font-tight text-[13px]"
+                style={{ background: T.elevated, border: `1px solid ${T.hairline2}`, color: T.fgMid }}
+              >Annuler</button>
+            </div>
+          </div>
         )}
 
         {/* Phase confirmation card */}
